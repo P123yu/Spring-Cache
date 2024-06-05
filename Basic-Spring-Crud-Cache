@@ -1,0 +1,344 @@
+
+
+// spring-cache
+
+package com.practice.serviceimpl;
+import org.springframework.cache.annotation.CacheEvict;
+import com.practice.model.UserModel;
+import com.practice.repository.UserRepository;
+import com.practice.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Override
+    @Transactional
+    @CachePut(value="user", key="#userModel.id")
+    public UserModel insert(UserModel userModel) {
+        UserModel user=userRepository.save(userModel);
+        return user;
+    }
+
+
+//    @Override
+//    public UserModel insert(UserModel userModel) {
+//        UserModel user=userRepository.save(userModel);
+//        return user;
+//    }
+
+    @Override
+    @Cacheable(value = "user", key="#id")
+    public UserModel getById(Long id) {
+        System.out.println("hello db");
+        UserModel user=userRepository.findById(id).orElse(null);
+        return user;
+    }
+
+    @Override
+    @Cacheable(value = "user", key="'allUser'")
+    public List<UserModel> getAll() {
+        List<UserModel> user=userRepository.findAll();
+        return user;
+    }
+
+    @Override
+    public List<UserModel> insertAll(List<UserModel> userModels) {
+        List<UserModel>userAll=userRepository.saveAll(userModels);
+        return userAll;
+    }
+
+
+    @Override
+    @Transactional
+    @CacheEvict(value="user", key="#id")
+    public void DeleteById(Long id) {
+        System.out.println("Deleting user with id: " + id);
+        userRepository.deleteById(id);
+    }
+
+
+    @Override
+    public void DeleteByJson(UserModel userModel) {
+        userRepository.delete(userModel);
+    }
+
+
+    @Override
+    @Cacheable(value = "user", key="'nameStartsWith-' + #name")
+    public List<UserModel> getAllNameStartsWith(String name) {
+        List<UserModel>user=userRepository.findByUserNameStartingWith(name);
+        return user;
+    }
+
+    @Override
+    @Cacheable(value = "user", key="'nameEndsWith-' + #name")
+    public List<UserModel> getAllNameEndsWith(String name) {
+        List<UserModel>user=userRepository.findByUserNameEndingWith(name);
+        return user;
+    }
+
+    @Override
+    @Cacheable(value = "user", key="'cityContains-' + #city")
+    public List<UserModel> getAllCityContains(String city) {
+        List<UserModel>user=userRepository.findByCityContaining(city);
+        return user;
+    }
+
+    @Override
+    public List<UserModel> getAllCityOrUserNameContains(String city,String UserName) {
+        List<UserModel>user=userRepository.findByCityOrUserNameContaining(city,UserName);
+        return user;
+    }
+
+    @Override
+    @Cacheable(value = "user", key="'marksBetween-' + #marks1 + '-' + #marks2")
+    public List<UserModel> getMarksBetween(Double marks1, Double marks2) {
+        List<UserModel>user=userRepository.findByMarksBetween(marks1,marks2);
+        return user;
+    }
+
+    @Override
+    public List<UserModel> getMarksLessThan(Double marks) {
+        List<UserModel>user=userRepository.findByMarksLessThan(marks);
+        return user;
+    }
+
+    @Override
+    public List<UserModel> getMarksOrder() {
+        List<UserModel>user=userRepository.findByOrderByMarksAsc();
+        return user;
+    }
+
+    @Override
+    public List<UserModel> getDistinctByMarks() {
+        return userRepository.findDistinctByOrderByMarksAsc();
+    }
+
+    @Scheduled(fixedRate = 125000,initialDelay =125000 )
+    @CacheEvict(value="user",allEntries = true)
+    public void String(){
+        System.out.println("deleted Cache....");
+    }
+
+
+
+
+}
+
+
+
+// controller
+
+package com.practice.controller;
+import com.practice.model.UserModel;
+import com.practice.serviceimpl.UserServiceImpl;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api")
+public class UserController {
+
+    @Autowired
+    private UserServiceImpl userServiceImpl;
+
+    @PostMapping("/post")
+    public ResponseEntity<String> insert(@RequestBody UserModel userModel){
+        UserModel user=userServiceImpl.insert(userModel);
+        if(user!=null){
+            return ResponseEntity.ok("inserted");
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not inserted");
+        }
+    }
+
+
+    @GetMapping("/get/{userId}")
+    public ResponseEntity<?>getById(@PathVariable("userId") Long id){
+        UserModel user=userServiceImpl.getById(id);
+        if(user!=null){
+            return ResponseEntity.ok(user);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not fetched data");
+        }
+    }
+
+
+    @GetMapping("/getAll")
+    public ResponseEntity<?>getAll(){
+        List<UserModel> userAll=userServiceImpl.getAll();
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not fetched all data");
+        }
+    }
+
+
+    @PostMapping("/postAll")
+    public ResponseEntity<String>insertAll(@RequestBody List<UserModel>userModels){
+        List<UserModel>userAll= userServiceImpl.insertAll(userModels);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok("insertAll");
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not posted all data");
+        }
+    }
+
+
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<String>DeleteById(@PathVariable Long id){
+        try{
+            userServiceImpl.DeleteById(id);
+            return ResponseEntity.ok("deleted by given id");
+        }
+        catch(Exception e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("given id for delete not found");
+        }
+    }
+
+
+    @DeleteMapping("/deleteByJson")
+    public ResponseEntity<?>DeleteByJson(@RequestBody UserModel userModel){
+        try{
+            userServiceImpl.DeleteByJson(userModel);
+            return ResponseEntity.ok("deleted by json");
+        }
+        catch (Exception e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not deleted by json");
+        }
+    }
+
+
+    @GetMapping("/getByNameStarts/{name}")
+    public ResponseEntity<?>getByNameStarts(@PathVariable String name){
+        List<UserModel>userAll=userServiceImpl.getAllNameStartsWith(name);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not found list of user starts with given name");
+        }
+    }
+
+
+
+
+
+    @GetMapping("/getByNameEnds/{name}")
+    public ResponseEntity<?>getByNameEnds(@PathVariable String name){
+        List<UserModel>userAll=userServiceImpl.getAllNameEndsWith(name);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not found list of user ends with given name");
+        }
+    }
+
+
+    @GetMapping("/getByCityContains/{city}")
+    public ResponseEntity<?>getByCityContains(@PathVariable String city){
+        List<UserModel>userAll=userServiceImpl.getAllCityContains(city);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not found list of city contains with given name");
+        }
+    }
+
+
+
+    @GetMapping("/getByCityOrUserName/{city}/{userName}")
+    public ResponseEntity<?>getByCityOrUserNameContains(@PathVariable String city,@PathVariable String userName){
+        List<UserModel>userAll=userServiceImpl.getAllCityOrUserNameContains(city,userName);
+        System.out.println(city+""+ userName);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("not found list of city contains with given name");
+        }
+    }
+
+
+
+
+    @GetMapping("/getByMarksBetween/{marks1}/{marks2}")
+    public ResponseEntity<?>getByMarksBetween(@PathVariable Double marks1,@PathVariable Double marks2){
+        List<UserModel>userAll=userServiceImpl.getMarksBetween(marks1,marks2);
+        System.out.println(marks1+""+ marks2);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("no marks found in between");
+        }
+    }
+
+
+    @GetMapping("/getByMarksOrd")
+    public ResponseEntity<?>getByMarksOrd(){
+        List<UserModel>userAll=userServiceImpl.getMarksOrder();
+
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("no marks found in between");
+        }
+    }
+
+
+
+
+    @GetMapping("/getByMarksLessThan/{marks}")
+    public ResponseEntity<?>getByMarksLessThan(@PathVariable Double marks){
+        List<UserModel>userAll=userServiceImpl.getMarksLessThan(marks);
+        System.out.println(marks);
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("no marks found in between");
+        }
+    }
+
+    @GetMapping("/getByMarksDist")
+    public ResponseEntity<?>getByMarksDist(){
+        List<UserModel>userAll=userServiceImpl.getDistinctByMarks();
+
+        if(!userAll.isEmpty()){
+            return ResponseEntity.ok(userAll);
+        }
+        else{
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("no marks found in between");
+        }
+    }
+
+
+
+
+
+}
